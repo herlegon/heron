@@ -1,0 +1,5 @@
+-r requirements-common.txt
+git+https://github.com/herlegon/hytils.git
+git+https://github.com/herlegon/hsys.git
+git+https://github.com/herlegon/hinstall.git
+git+https://github.com/herlegon/denc.git

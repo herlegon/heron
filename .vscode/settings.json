@@ -1,0 +1,48 @@
+{
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/dist": true,
+        "**/*.egg-info": true,
+        "**/*.pt": true,
+        "**/*.pth": true,
+        "**/*.safetensors": true,
+        "**/*.onnx": true,
+        "**/*.engine": true,
+        "**/*.ncnn": true,
+        "**/*.bin": true,
+        "**/*.param": true,
+        "**/*.png": true,
+        "**/*.jpg": true,
+        "**/*.mkv": true,
+        "**/*.mp4": true,
+        "**/*.mov": true,
+        "**/*.mxf": true,
+        "**/*.exe": true,
+        "**/*.so": true,
+        "**/*.ui": false,
+        "**/~$$*": true,
+        "**/external": true,
+        "**/resources": true
+    },
+    "files.insertFinalNewline": true,
+    "[python]": {
+        "editor.rulers": [
+            90,
+            120
+        ]
+    },
+    "python.analysis.extraPaths": [
+        "../hytils",
+        "../hsys",
+        "../hinstall",
+        "../denc"
+    ],
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportAssignmentType": "none",
+        "reportArgumentType": "none",
+        "reportOptionalMemberAccess": "none",
+        "reportCallIssue": "none",
+        "reportAttributeAccessIssue": "none",
+    },
+}
