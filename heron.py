@@ -128,10 +128,14 @@ def main():
 
     do_resize_with_fsar: bool = args.fsar or args.fsar_h
     if do_resize_with_fsar:
+<<<<<<< HEAD
         in_media.video.resize = FFmpegResizer(
             enabled=True,
 
         )
+=======
+        in_media.video.resize = FFmpegResizer
+>>>>>>> bea0e0e0181c228093d2bbb5e8b549257cd4ce2e
 
         # resize width
         if result := re.search(re.compile(r"^(\d+)\/(\d+)$"), args.fsar):
