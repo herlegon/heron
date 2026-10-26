@@ -1,9 +1,12 @@
 from argparse import ArgumentParser
+from copy import deepcopy
+from fractions import Fraction
 import logging
 from pathlib import Path
 import re
 import sys
 import signal
+from warnings import warn
 
 from denc.vstream import FFmpegResizer
 from hytils import is_access_granted, lightcyan, red, yellow
@@ -119,56 +122,72 @@ def main():
 
     # Resize
     #-------------------------------------------------------------------------------------
+    step_no: int = 1
 
-    #   Update output video size if needed when SAR is not 1:1
+    # Update output video size if needed when SAR is not 1:1
     do_resize: bool = False
     h, w, c = in_media.video.shape
     if args.fsar and args.fsar_h:
         sys.exit(red("[E] fsar and fsar_h cannot be used together"))
 
+    # Let the user choose how to resize when sar != 1:1
     do_resize_with_fsar: bool = args.fsar or args.fsar_h
     if do_resize_with_fsar:
-<<<<<<< HEAD
-        in_media.video.resize = FFmpegResizer(
-            enabled=True,
-
-        )
-=======
-        in_media.video.resize = FFmpegResizer
->>>>>>> bea0e0e0181c228093d2bbb5e8b549257cd4ce2e
-
+        size: tuple[int, int] = ()
         # resize width
         if result := re.search(re.compile(r"^(\d+)\/(\d+)$"), args.fsar):
-            f_vi['shape'] = (
-                h,
-                int(w * int(result.group(2)) / int(result.group(1)) + 0.5),
-                c
-            )
+            size = (int(w * int(result.group(2)) / int(result.group(1)) + 0.5), h)
         # resize height
         if result := re.search(re.compile(r"^(\d+)\/(\d+)$"), args.fsar_h):
-            f_vi['shape'] = (
-                int(h * int(result.group(1)) / int(result.group(2)) + 0.5),
-                w,
-                c
-            )
-        print(f" {step_no}. resize to {f_vi['shape'][1]}x{f_vi['shape'][0]}")
+            size = (w, int(h * int(result.group(1)) / int(result.group(2)) + 0.5))
+
+        in_media.video.resize = FFmpegResizer(
+            enabled=True,
+            use_sar=True,
+            side='height' if args.fsar_h else 'width',
+            size=size
+        )
+
+        print(f" {step_no}. resize to {'x'.join(size)}")
         step_no += 1
 
-    #   resize with sar. Default: resize height
-    if not do_resize_with_fsar and any([x != 1 for x in f_vi['sar']]):
+    # Otherwise resize with sar (Default: resize height)
+    if not do_resize_with_fsar and in_media.video.sar != Fraction(1, 1):
         do_resize = True
-        f_vi['shape'] = (int(h * f_vi['sar'][0] / f_vi['sar'][1]), w, c)
-        print(f" {step_no}. resize to {f_vi['shape'][1]}x{f_vi['shape'][0]}")
+        size = (w, int(h * in_media.video.sar.numerator / in_media.video.sar.denominator))
+
+        print(f" {step_no}. resize to {'x'.join(size)}")
         step_no += 1
 
     if do_resize:
-        warn(yellow(f"[W] TODO: validate resize: {in_vi['shape']} -> {f_vi['shape']}"))
+        warn(yellow(f"[W] TODO: validate resize: {in_media.video.shape} -> {size}"))
 
 
+    # Resize before inference
+    #-------------------------------------------------------------------------
+    in_sf = in_media.video.stream_format()
+    n1_sf = deepcopy(in_sf)
+
+    if args.resize != 1:
+        do_resize = True
+        resize_factor = args.resize
+        h, w, c = n1_sf.shape
+        n1_sf.shape = (int(resize_factor * h + 0.5), int(resize_factor * w + 0.5), c)
+
+    elif args.resize_to:
+        do_resize = True
+        w, h = args.resize_to.split("x")
+        n1_sf.shape = (int(h), int(w), n1_sf.shape[-1])
+
+    pre_resize_shape: list | None = None
+    if do_resize:
+        pre_resize_shape = n1_sf.shape
+        print(f" {step_no}. resize to {n1_sf.shape[1]}x{n1_sf.shape[0]}")
+        step_no += 1
 
 
-
-
+    # Open model
+    #-------------------------------------------------------------------------
 
 
     # Decoder
