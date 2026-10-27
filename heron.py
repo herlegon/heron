@@ -29,7 +29,12 @@ from denc import (
     add_debug_arguments,
     add_sar_arguments,
 )
-
+from nnarchs import (
+    nnlib,
+    NnModel,
+    Hdtype,
+    HdtypeToTorch,
+)
 from hsys import (
     is_feature_supported
 )
@@ -188,6 +193,21 @@ def main():
 
     # Open model
     #-------------------------------------------------------------------------
+    n2_sf = deepcopy(n1_sf)
+    model_fp = Path(args.model).resolve()
+    model: NnModel = nnlib.open(model_fp, device)
+
+    infer_dtype: Hdtype = 'fp16'
+    if args.fp32:
+        infer_dtype = 'fp32'
+    elif args.fp16:
+        infer_dtype = 'fp16'
+    elif args.bf16:
+        infer_dtype = 'bf16'
+
+    h, w, c = n2_sf.shape
+    n2_sf.shape = (model.scale * h, model.scale * w, c)
+    n2_sf.dtype = HdtypeToTorch(infer_dtype)
 
 
     # Decoder

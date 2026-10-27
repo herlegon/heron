@@ -35,7 +35,8 @@
         "../hytils",
         "../hsys",
         "../hinstall",
-        "../denc"
+        "../denc",
+        "../nnarchs",
     ],
     "python.analysis.typeCheckingMode": "basic",
     "python.analysis.diagnosticSeverityOverrides": {
@@ -45,4 +46,11 @@
         "reportCallIssue": "none",
         "reportAttributeAccessIssue": "none",
     },
+    "python-envs.pythonProjects": [
+        {
+            "path": ".",
+            "envManager": "ms-python.python:conda",
+            "packageManager": "ms-python.python:conda"
+        }
+    ],
 }
