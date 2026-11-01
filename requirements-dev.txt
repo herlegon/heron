@@ -3,3 +3,4 @@
 -e ../hsys
 -e ../hinstall
 -e ../denc
+-e ../gpu-algos

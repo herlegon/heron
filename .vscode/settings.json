@@ -37,6 +37,7 @@
         "../hinstall",
         "../denc",
         "../nnarchs",
+        "../gpu-algos",
     ],
     "python.analysis.typeCheckingMode": "basic",
     "python.analysis.diagnosticSeverityOverrides": {
