@@ -9,7 +9,7 @@ import signal
 from warnings import warn
 
 from denc.vstream import FFmpegResizer
-from hytils import blue, green, is_access_granted, lightcyan, lightgreen, purple, red, yellow
+from hytils import blue, green, lightcyan, lightgreen, purple, red, yellow
 from inference.cuda_infer_thread import CudaInferThread
 from inference.run_threads import run_threads
 from inference.trt_infer_thread import TrtInferThread
@@ -36,6 +36,8 @@ from denc import (
     add_sar_arguments,
     add_resize_arguments,
     add_inference_arguments,
+    generate_output_filepath,
+    BoundedFloat,
 )
 from nnarchs import (
     nnlib,
@@ -71,38 +73,13 @@ def main():
     # Input file
     #-------------------------------------------------------------------------------------
     in_fp: Path = Path(args.input).resolve()
-    in_media: MediaStream = denc.open(in_fp)
+    in_media: MediaStream = denc.open(filepath=in_fp)
     dlogger.info(f"{lightcyan(f"Input file:")}  {in_fp}")
     dlogger.debug(in_media.video)
 
-
     # Output file
     #-------------------------------------------------------------------------------------
-    #   priority: `output` -> `out_dir` -> none
-    output: str = args.output
-    output_dir: str = args.out_dir
-    append_params: bool = args.append_params
-    if output:
-        output_fp: Path = Path(output).resolve()
-    elif output_dir:
-        output_fp: Path = Path(output_dir).resolve() / in_fp.name
-    else:
-        output_fp: Path = in_fp.parent / f"{in_fp.stem}_out{in_fp.suffix}"
-        append_params = False
-
-    if append_params:
-        output_fp: Path = output_fp.parent / f"{output_fp.stem}_out{output_fp.suffix}"
-
-    if output_fp == in_fp:
-        dlogger.error(red(f"Error: Output file must not be the input file"))
-        sys.exit()
-
-    dlogger.info(f"{lightcyan(f"Output file:")} {output_fp}")
-    out_dir: Path = output_fp.parent
-    if not is_access_granted(out_dir, 'w'):
-        dlogger.error(red(f"Error: no write access to {out_dir}"))
-        sys.exit()
-
+    output_fp = generate_output_filepath(args)
 
     # Output media
     #-------------------------------------------------------------------------------------
@@ -113,7 +90,6 @@ def main():
     #-------------------------------------------------------------------------------------
     if not args.model:
         raise ValueError(red(f"missing model"))
-
 
     # Chain
     #-------------------------------------------------------------------------------------
@@ -140,7 +116,6 @@ def main():
             # use cuda device 0 by default
             in_media.video.device = Device(name=device)
             out_media.video.device = Device(name=device)
-
 
     # Resize
     #-------------------------------------------------------------------------------------
@@ -183,7 +158,6 @@ def main():
 
     if do_resize:
         warn(yellow(f"[W] TODO: validate resize: {in_media.video.shape} -> {size}"))
-
 
     # Resize before inference
     #-------------------------------------------------------------------------
@@ -254,7 +228,6 @@ def main():
         verbose=debug
     )
 
-
     # Inference threads: currently a single one
     #-------------------------------------------------------------------------
     infer_threads: list[TrtInferThread | CudaInferThread] = []
@@ -288,7 +261,6 @@ def main():
             prescale=None
         )
 
-
     # Set producers and consumers
     #-------------------------------------------------------------------------
     # Currently easier and safe to connect the encoder to the decoder
@@ -297,13 +269,11 @@ def main():
     infer_threads[0].set_consumer(encoder_thread)
     encoder_thread.set_producer(decoder_thread)
 
-
     # Progress bar
     #-------------------------------------------------------------------------
     total_frames: int = in_media.video.frame_count
     progress_thread: ProgressThread = ProgressThread(total=total_frames)
     encoder_thread.set_progress_thread(progress_thread)
-
 
     # Main loop
     #-------------------------------------------------------------------------
