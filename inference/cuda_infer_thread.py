@@ -73,8 +73,7 @@ class CudaInferThread(BaseThread):
             print(cyan(f"[V][I][CUDA] Cuda InferenceThread"))
         in_queue: Queue = self.in_queue
 
-        d_thread: DecoderThread = self.producer
-        e_thread: EncoderThread = self.consumer
+        # d_thread: DecoderThread = self.producer
 
         cuda_stream = self.infer_stream
         session_dtype: torch.dtype = self.cuda_session.dtype
@@ -91,7 +90,7 @@ class CudaInferThread(BaseThread):
                 frame: NnFrame = input
 
                 if verbose:
-                    verbose_prefix: str = f"[V][I][FILTER][{frame.f_no}]"
+                    verbose_prefix: str = f"[V][I][CUDA][{frame.f_no}]"
 
                 # Resize before inference
                 if self.prescale is not None:
@@ -125,7 +124,7 @@ class CudaInferThread(BaseThread):
                 time.sleep(0.0001)
                 cuda_stream.synchronize()
 
-                e_thread.put_frame(frame)
+                self.consumer.put_frame(frame)
 
                 # faster but race condition?
                 # if d_thread is not None:
