@@ -235,18 +235,12 @@ class CudaTemporalInferenceThread(BaseThread):
                 #     + window[3] * 0.75
                 #     + window[4] * 0.5
                 # ) / 3.5
-                out_tensor = nn_module(in_tensor)
+                in_tensors = torch.cat(window, dim=0).unsqueeze(0)
+                out_tensor = nn_module(in_tensors)
 
-
-
-                #-----------------------------------------------------------------------------
                 out_tensor = torch.clamp_(out_tensor, 0., 1.)
-                out_tensor = window[2]
-
-                # get frame to output
                 out_frame = cache.current_frame()
                 out_frame.tensor = out_tensor
-                gpu_resize_to_(out_frame, out_shape)
 
                 time.sleep(0.0001)
                 cuda_stream.synchronize()

@@ -12,7 +12,7 @@ from warnings import warn
 
 from denc.vstream import FFmpegResizer
 from hytils import blue, green, lightcyan, lightgreen, purple, red, yellow
-from inference.cuda_infer_thread import CudaInferThread
+from inference.cuda_temporalfix_thread import CudaTemporalInferenceThread
 from inference.run_threads import run_threads
 from inference.trt_infer_thread import TrtInferThread
 try:
@@ -88,6 +88,8 @@ Higher resolution tends to need higher strength. Too high may oversmooth small m
     if debug:
         dlogger.setLevel(logging.DEBUG)
 
+    if not is_feature_supported(feature='cuda'):
+        raise SystemError(red(f"Missing CUDA GPU"))
 
     # Input file
     #-------------------------------------------------------------------------------------
@@ -134,10 +136,10 @@ Higher resolution tends to need higher strength. Too high may oversmooth small m
     strength_upper = math.ceil(strength)
     weighting = strength - strength_lower
 
-    model: PyTorchModel = nnlib.open(model_path=temporal_models[strength_lower])
+    model: PyTorchModel = nnlib.open(model_path=model_dir / temporal_models[strength_lower])
     if strength_lower != strength_upper:
         lower_model: PyTorchModel = model
-        upper_model: PyTorchModel = nnlib.open(model_path=temporal_models[strength_upper])
+        upper_model: PyTorchModel = nnlib.open(model_path=model_dir / temporal_models[strength_upper])
 
         # lower_model.state_dict
         # upper_model.state_dict
@@ -154,7 +156,86 @@ Higher resolution tends to need higher strength. Too high may oversmooth small m
         # No need to keep the uppdermodel in memory
         del upper_model
 
+    dlogger.info(lightcyan(f"\nModel:"))
+    dlogger.debug(model)
+    dlogger.info(blue(f"  framework: ") + model.framework.type.value)
+    dlogger.info(blue(f"  arch: ") + f"{model.arch_name}")
+    dlogger.info(blue(f"  scale: ") + f"{model.scale}")
 
+    # use cuda device 0 by default
+    device = "cuda:0"
+    in_media.video.device = Device(name=device)
+    out_media.video.device = Device(name=device)
+
+    infer_dtype: Hdtype = 'fp32'
+    if args.fp32:
+        infer_dtype = 'fp32'
+    elif args.fp16:
+        infer_dtype = 'fp16'
+    elif args.bf16:
+        infer_dtype = 'bf16'
+
+    # Chain
+    #-------------------------------------------------------------------------------------
+    in_sf: VideoStreamFormat = in_media.video.stream_format()
+    dlogger.debug(green(f"Decoder stream format: ") + f"{in_sf}")
+    decoder_thread = DecoderThread(media_stream=in_media, verbose=debug)
+
+    out_media: MediaStream = in_media.to_output(filepath=output_fp)
+    out_sf = deepcopy(in_sf)
+    out_media.video.input_stream_format = out_sf
+    dlogger.debug(purple(f"Encoder input stream format: ") + f"{out_sf}")
+    dlogger.debug(f"input->FFmpeg pipe: {out_media.video.pipe_format}")
+    encoder_thread = EncoderThread(media_stream=out_media, verbose=debug)
+
+    infer_thread = CudaTemporalInferenceThread(name=model.arch.name, debug=debug)
+    infer_thread.initialize(
+            model=model,
+            device="cuda:0",
+            dtype=infer_dtype,
+            prescale=None
+        )
+
+
+    decoder_thread.set_consumer(infer_thread)
+    infer_thread.set_producer(decoder_thread)
+    infer_thread.set_consumer(encoder_thread)
+    encoder_thread.set_producer(decoder_thread)
+
+
+    # Progress bar
+    #-------------------------------------------------------------------------
+    total_frames: int = in_media.video.frame_count
+    progress_thread: ProgressThread = ProgressThread(total=total_frames)
+    encoder_thread.set_progress_thread(progress_thread)
+
+
+
+    # Main loop
+    #-------------------------------------------------------------------------
+    stats = {}
+
+    total_frames: int = out_media.video.frame_count
+    elapsed = run_threads(
+        dec_thread=decoder_thread,
+        enc_thread=encoder_thread,
+        infer_threads=[infer_thread,],
+        progress_thread=progress_thread,
+        total_frames=total_frames,
+        vram_stats=stats,
+        debug=debug
+    )
+
+    print(f"elapsed: {elapsed:.02f}s ({total_frames/elapsed:.02f}fps)")
+    print(f"VRAM mean: {stats['mean_mb']:.0f} MB | peak: {stats['peak_mb']:.0f} MB")
+
+    if not args.cpu:
+        torch.cuda.empty_cache()
+
+    if sys.platform == "win32":
+        winsound.Beep(frequency=440, duration=200)
+
+    dlogger.info(f"Done")
 
 
 

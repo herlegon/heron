@@ -47,7 +47,8 @@ from nnarchs import (
     NnFrameworkType,
 )
 from hsys import (
-    is_feature_supported
+    is_feature_supported,
+    VramMonitor,
 )
 
 
@@ -186,6 +187,9 @@ def main():
 
     # Open model
     #-------------------------------------------------------------------------
+    vram_monitor = VramMonitor(device=0)
+    vram_monitor.start()
+
     n2_sf = deepcopy(n1_sf)
     model_fp = Path(args.model).resolve()
     model: NnModel = nnlib.open(model_fp, device)
@@ -244,7 +248,7 @@ def main():
             model=model,
             device="cuda:0",
             dtype=infer_dtype,
-            prescale=None
+            prescale=pre_resize_shape
         )
 
     # Cuda inference thread: SISR
@@ -287,7 +291,8 @@ def main():
         progress_thread=progress_thread,
         total_frames=total_frames,
         vram_stats=stats,
-        debug=debug
+        debug=debug,
+        vram_monitor=vram_monitor
     )
 
     print(f"elapsed: {elapsed:.02f}s ({total_frames/elapsed:.02f}fps)")

@@ -18,6 +18,8 @@ import torch
 from denc import (
     BaseThread,
     NnFrame,
+    wait_frame_ready,
+    mark_frame_ready,
 )
 from nnarchs import (
     nnlib,
@@ -29,12 +31,6 @@ from gpu_algos import (
     gpu_resize_to_,
     gpu_resize_,
 )
-if TYPE_CHECKING:
-    from denc import (
-        DecoderThread,
-        EncoderThread,
-    )
-
 
 
 class TrtInferThread(BaseThread):
@@ -83,9 +79,6 @@ class TrtInferThread(BaseThread):
             print(cyan(f"[V][I][TRT] TensorRT InferenceThread"))
         in_queue: Queue = self.in_queue
 
-        d_thread: DecoderThread = self.producer
-        e_thread: EncoderThread = self.consumer
-
         session = self.trt_session
         context, engine = session.context, session.engine
         session_dtype: torch.dtype = session.dtype
@@ -101,6 +94,7 @@ class TrtInferThread(BaseThread):
                 if input is None or self._stop_event.is_set():
                     break
                 frame: NnFrame = input
+                wait_frame_ready(frame=frame, cuda_stream=cuda_stream)
 
                 if verbose:
                     verbose_prefix: str = f"[V][I][TRT][{frame.f_no}]"
@@ -129,7 +123,9 @@ class TrtInferThread(BaseThread):
                 in_tensor = in_tensor.contiguous()
                 # in_tensor = torch.ravel(in_tensor)
                 if verbose:
-                    print(blue(f"{verbose_prefix} in tensor dtype:{in_tensor.dtype}, {in_tensor.data_ptr()}"))
+                    print(blue(
+                        f"{verbose_prefix} in tensor: {in_tensor.shape}, {in_tensor.dtype}, {in_tensor.data_ptr()}"
+                    ))
 
                 # Prepare output tensor in same device
                 out_tensor_shape = (n, c, in_h * scale, in_w * scale)
@@ -151,15 +147,10 @@ class TrtInferThread(BaseThread):
                         context.set_input_shape(tensor_name, in_tensor.shape)
 
                 context.execute_async_v3(stream_handle=cuda_stream.cuda_stream)
-
                 frame.tensor = torch.clamp(out_tensor, 0., 1.)
 
-                time.sleep(0.0001)
-                cuda_stream.synchronize()
-
-                e_thread.put_frame(frame)
-                # faster but race condition?
-                # d_thread.set_produce_flag()
+                mark_frame_ready(frame=frame, stream=cuda_stream)
+                self.consumer.put_frame(frame)
 
         if verbose:
             print(cyan(f"[V][I][TRT] Ended"))

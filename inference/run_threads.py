@@ -7,7 +7,7 @@ from denc import (
     ProgressThread,
 )
 from hytils import red
-from utils.vram_monitor import VramMonitor
+from hsys import VramMonitor
 
 
 def run_threads(
@@ -17,6 +17,7 @@ def run_threads(
     progress_thread: ProgressThread | None = None,
     total_frames: int = 0,
     vram_stats: dict | None = None,
+    vram_monitor: VramMonitor = None,
     debug: bool = False
 ) -> float:
     # Start all threads
@@ -30,9 +31,6 @@ def run_threads(
     dec_thread.is_cuda_workflow = True
     enc_thread.is_cuda_workflow = True
 
-    monitor = VramMonitor(interval=0.05, skip_first=20) if vram_stats is not None else None
-    if monitor:
-        monitor.start()
 
     start_time = time.time()
 
@@ -97,9 +95,9 @@ def run_threads(
 
     elapsed = time.time() - start_time
 
-    if monitor:
-        monitor.stop()
-        vram_stats.update(monitor.stats())
+    if vram_monitor:
+        vram_monitor.stop()
+        vram_stats.update(vram_monitor.stats())
 
 
     if progress_thread is not None:

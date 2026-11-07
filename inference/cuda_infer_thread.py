@@ -1,14 +1,13 @@
 from __future__ import annotations
 from queue import Queue
-import time
-from typing import TYPE_CHECKING
 import torch
-from torch import Tensor
 from hytils import blue, cyan
 
 from denc import (
     BaseThread,
     NnFrame,
+    wait_frame_ready,
+    mark_frame_ready,
 )
 from nnarchs import (
     nnlib,
@@ -20,12 +19,6 @@ from gpu_algos import (
     gpu_resize_to_,
     gpu_resize_,
 )
-if TYPE_CHECKING:
-    from denc import (
-        DecoderThread,
-        EncoderThread,
-    )
-
 
 
 class CudaInferThread(BaseThread):
@@ -89,6 +82,10 @@ class CudaInferThread(BaseThread):
                     break
                 frame: NnFrame = input
 
+                wait_frame_ready(frame=frame, stream=cuda_stream)
+                cuda_stream.wait_event(frame.event)
+                frame.tensor.record_stream(cuda_stream)
+
                 if verbose:
                     verbose_prefix: str = f"[V][I][CUDA][{frame.f_no}]"
 
@@ -118,17 +115,11 @@ class CudaInferThread(BaseThread):
 
                 # Perform simple inference
                 frame.tensor = nn_module(in_tensor)
-                # frame = gpu_resize_(frame, scale_factor=2.)
                 frame.tensor = torch.clamp_(frame.tensor, 0., 1.)
 
-                time.sleep(0.0001)
-                cuda_stream.synchronize()
-
+                mark_frame_ready(frame=frame, stream=cuda_stream)
                 self.consumer.put_frame(frame)
 
-                # faster but race condition?
-                # if d_thread is not None:
-                #     d_thread.set_produce_flag()
 
         if verbose:
             print(cyan(f"[V][I][CUDA] Ended"))

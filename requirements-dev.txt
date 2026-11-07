@@ -4,3 +4,4 @@
 -e ../hinstall
 -e ../denc
 -e ../gpu-algos
+-e ../nnarchs
