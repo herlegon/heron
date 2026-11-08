@@ -10,6 +10,18 @@ from hytils import red
 from hsys import VramMonitor
 
 
+def _stop_all(threads: list[BaseThread], timeout: float = 5.0) -> list[BaseThread]:
+    deadline = time.monotonic() + timeout
+    alive = [t for t in threads if t.is_alive()]
+    while alive and time.monotonic() < deadline:
+        for t in alive:
+            t.stop(force=True)
+        time.sleep(0.05)
+        alive = [t for t in alive if t.is_alive()]
+    return alive
+
+
+
 def run_threads(
     dec_thread: DecoderThread,
     infer_threads: list[BaseThread] | BaseThread,
@@ -20,116 +32,84 @@ def run_threads(
     vram_monitor: VramMonitor = None,
     debug: bool = False
 ) -> float:
-    # Start all threads
-    if not isinstance(infer_threads, list | tuple):
+    if not isinstance(infer_threads, (list, tuple)):
         infer_threads = [infer_threads]
+    infer_threads = [t for t in infer_threads if t is not None]
+    upstream: list[BaseThread] = [dec_thread, *infer_threads]
+    chain: list[BaseThread] = [*upstream, enc_thread]
 
-    dec_thread.verbose = debug
-    enc_thread.verbose = debug
+    for t in (dec_thread, enc_thread):
+        t.verbose = debug
+        t.is_cuda_workflow = True
 
-    # Indicates to the decoder/encoder that it's a full GPU workflow
-    dec_thread.is_cuda_workflow = True
-    enc_thread.is_cuda_workflow = True
-
-
-    start_time = time.time()
-
-    dec_thread.set_produce_flag()
-    for thread in (
-        dec_thread,
-        *infer_threads,
-        enc_thread,
-    ):
-        if thread is not None:
-            thread.start()
-
-    if not debug and progress_thread is not None:
-        progress_thread.start()
-
-    decoding: bool = True
-    err: bool = False
-    ask_to_end: bool = False
-    while True:
-        if not decoding:
-            # All frames encoded, send poison pill to all inference threads
-            if enc_thread.encoded == total_frames and ask_to_end:
-                if debug:
-                    print(f"[V][C] All frames encoded {enc_thread.encoded}/{total_frames}, send poison pill to encoder")
-                enc_thread.put_frame(None)
-                ask_to_end = False
-
-            # Encoding has ended
-            if (
-                not dec_thread.is_alive()
-                and not enc_thread.is_alive()
-            ):
-                if debug:
-                    print("[V][C] All frames encoded, encoder has ended")
-                encoded = enc_thread.encoded
-                break
-            time.sleep(0.00001)
-            continue
-
-        time.sleep(0.00001)
-        # Detect end of decoding
-        if not dec_thread.is_alive() and decoding:
-            if debug:
-                print("[V][C] decoder has ended")
-            err, message = dec_thread.error_encountered()
-            if err:
-                print(red(message))
-                break
-            else:
-                decoding = False
-                ask_to_end = True
-                if debug:
-                    print(f"[V][C] wait for {total_frames} to be encoded")
-
-        time.sleep(0.00001)
-        if not enc_thread.is_alive() and dec_thread.is_alive():
-            print(red("Error: the encoder encountered an unexpected error"))
-            err = True
-            break
-
-        time.sleep(0.00001)
-
-    elapsed = time.time() - start_time
-
-    if vram_monitor:
-        vram_monitor.stop()
-        vram_stats.update(vram_monitor.stats())
+    error: str | None = None
+    start = time.perf_counter()
+    elapsed = 0.0
 
 
-    if progress_thread is not None:
-        progress_thread.put(0, force=True)
-    time.sleep(0.00001)
+    try:
+        for t in chain:
+            t.start()
+        if not debug and progress_thread is not None:
+            progress_thread.start()
 
-    # Stop remaining threads if not already stopped (error cases)
-    for thread in infer_threads:
-        if thread is not None and thread.is_alive():
-            # print(f"[V][C] sent a poison pill at the end because still inference threads")
-            thread.stop(force=True)
-            while thread.is_alive():
-                time.sleep(0.02)
+        while enc_thread.is_alive():
+            enc_thread.join(timeout=0.05)
 
-    for thread in (dec_thread, *infer_threads, enc_thread):
-        if thread is not None and thread.is_alive():
-            thread.stop(force=True)
-            time.sleep(0.5)
-
-    if progress_thread is not None:
-        while True:
-            if progress_thread is not None and progress_thread.is_alive():
-                progress_thread.stop(force=True)
-                time.sleep(0.1)
-            else:
+            # Watchdog
+            for t in upstream:
+                if not t.is_alive():
+                    failed, message = t.error_encountered()
+                    if failed:
+                        error = f"{t.name}: {message}"
+                        break
+            if error:
                 break
 
-    for thread in (dec_thread, *infer_threads, enc_thread):
-        if thread is not None and thread.is_alive():
-            print(red(f"Error: {thread.name} is still alive"))
+        if error is None:
+            failed, message = enc_thread.error_encountered()
+            if failed:
+                error = f"{enc_thread.name}: {message}"
+            elif enc_thread.encoded != total_frames:
+                error = f"{enc_thread.encoded}/{total_frames} frames encoded"
+
+        # wait for the end of the encoding
+        p = enc_thread.e_subprocess
+        if p is not None:
+            try:
+                p.wait()
+            except Exception as e:
+                dlogger.error(f"wait ffmpeg: {e}")
+
+        if progress_thread is not None:
+            progress_thread.put(0, force=True)
+        elapsed = time.perf_counter() - start
+
+    finally:
+        if vram_monitor is not None:
+            vram_monitor.stop()
+            if vram_stats is not None:
+                vram_stats.update(vram_monitor.stats())
+
+        stuck = _stop_all([dec_thread, *infer_threads], timeout=5.0)
+        stuck += _stop_all([enc_thread], timeout=20.0)
+        if progress_thread is not None:
+            _stop_all([progress_thread], timeout=2.0)
+
+            # In case of the progressbar stops below 100%:
+            # deadline = time.monotonic() + 1.0
+            # while (
+            #     not progress_thread.in_queue.empty()
+            #     and time.monotonic() < deadline
+            # ):
+            #     time.sleep(0.01)
+
+        for t in stuck:
+            dlogger.error(red(f"Error: {t.name} is still alive"))
+
+    if error:
+        dlogger.error(red(f"Error: {error}"))
+        raise RuntimeError(error)
+
 
     return elapsed
-
-
-

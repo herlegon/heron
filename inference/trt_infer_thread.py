@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor
 
-from hytils import blue, cyan
+from hytils import blue, cyan, red
 try:
     import tensorrt as trt
 except:
@@ -20,6 +20,7 @@ from denc import (
     NnFrame,
     wait_frame_ready,
     mark_frame_ready,
+    dlogger,
 )
 from nnarchs import (
     nnlib,
@@ -66,9 +67,13 @@ class TrtInferThread(BaseThread):
 
 
     def run(self):
-        self.perform_trt_inference()
-        while not self.in_queue.empty():
-            self.in_queue.get_nowait()
+        try:
+            self.perform_trt_inference()
+            while not self.in_queue.empty():
+                self.in_queue.get_nowait()
+
+        except Exception as e:
+            dlogger.error(red(f"[TRT] {str(e)}"))
 
 
     @torch.inference_mode()

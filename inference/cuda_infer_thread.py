@@ -1,13 +1,14 @@
 from __future__ import annotations
 from queue import Queue
 import torch
-from hytils import blue, cyan
+from hytils import blue, cyan, red
 
 from denc import (
     BaseThread,
     NnFrame,
     wait_frame_ready,
     mark_frame_ready,
+    dlogger,
 )
 from nnarchs import (
     nnlib,
@@ -53,9 +54,13 @@ class CudaInferThread(BaseThread):
 
 
     def run(self):
-        self.perform_cuda_infer()
-        while not self.in_queue.empty():
-            self.in_queue.get_nowait()
+        try:
+            self.perform_cuda_infer()
+            while not self.in_queue.empty():
+                self.in_queue.get_nowait()
+
+        except Exception as e:
+            dlogger.error(red(f"[CUDA] {str(e)}"))
 
 
     @torch.inference_mode()
