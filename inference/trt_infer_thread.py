@@ -94,7 +94,7 @@ class TrtInferThread(BaseThread):
                 if input is None or self._stop_event.is_set():
                     break
                 frame: NnFrame = input
-                wait_frame_ready(frame=frame, cuda_stream=cuda_stream)
+                wait_frame_ready(frame=frame, stream=cuda_stream)
 
                 if verbose:
                     verbose_prefix: str = f"[V][I][TRT][{frame.f_no}]"

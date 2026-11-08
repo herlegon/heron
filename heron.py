@@ -276,6 +276,7 @@ def main():
     # Progress bar
     #-------------------------------------------------------------------------
     total_frames: int = in_media.video.frame_count
+    progress_thread = None
     progress_thread: ProgressThread = ProgressThread(total=total_frames)
     encoder_thread.set_progress_thread(progress_thread)
 

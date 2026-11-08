@@ -54,7 +54,6 @@ class CudaInferThread(BaseThread):
 
     def run(self):
         self.perform_cuda_infer()
-
         while not self.in_queue.empty():
             self.in_queue.get_nowait()
 
@@ -63,29 +62,24 @@ class CudaInferThread(BaseThread):
     def perform_cuda_infer(self):
         verbose: bool = self.verbose
         if verbose:
-            print(cyan(f"[V][I][CUDA] Cuda InferenceThread"))
+            print(blue(f"[V][I][CUDA] Cuda InferenceThread"))
         in_queue: Queue = self.in_queue
-
-        # d_thread: DecoderThread = self.producer
 
         cuda_stream = self.infer_stream
         session_dtype: torch.dtype = self.cuda_session.dtype
         nn_module = self.cuda_session.module
-        # scale = session.model.scale
 
         with torch.cuda.stream(cuda_stream):
             while not self._stop_event.is_set():
                 if verbose:
-                    print(cyan("[V][I][CUDA] waiting"))
+                    print(blue("[V][I][CUDA] waiting"))
+
                 input = in_queue.get(block=True)
                 if input is None or self._stop_event.is_set():
                     break
                 frame: NnFrame = input
 
                 wait_frame_ready(frame=frame, stream=cuda_stream)
-                cuda_stream.wait_event(frame.event)
-                frame.tensor.record_stream(cuda_stream)
-
                 if verbose:
                     verbose_prefix: str = f"[V][I][CUDA][{frame.f_no}]"
 
@@ -106,12 +100,10 @@ class CudaInferThread(BaseThread):
 
                 # Input tensor
                 in_tensor = frame.tensor
-                # n, c, in_h, in_w = in_tensor.shape
                 in_tensor = in_tensor.to(dtype=session_dtype)
                 in_tensor = in_tensor.contiguous()
-                # in_tensor = in_tensor.to(dtype=...)
                 if verbose:
-                    print(blue(f"{verbose_prefix} in tensor dtype:{in_tensor.dtype}, {in_tensor.data_ptr()}"))
+                    print(blue(f"{verbose_prefix} in tensor:{in_tensor.shape}, {in_tensor.dtype}, {in_tensor.data_ptr()}"))
 
                 # Perform simple inference
                 frame.tensor = nn_module(in_tensor)
@@ -122,4 +114,4 @@ class CudaInferThread(BaseThread):
 
 
         if verbose:
-            print(cyan(f"[V][I][CUDA] Ended"))
+            print(blue(f"[V][I][CUDA] Ended"))

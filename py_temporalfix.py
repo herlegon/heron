@@ -10,7 +10,6 @@ import sys
 import signal
 from warnings import warn
 
-from denc.vstream import FFmpegResizer
 from hytils import blue, green, lightcyan, lightgreen, purple, red, yellow
 from inference.cuda_temporalfix_thread import CudaTemporalInferenceThread
 from inference.run_threads import run_threads
@@ -50,7 +49,8 @@ from nnarchs import (
     PyTorchModel,
 )
 from hsys import (
-    is_feature_supported
+    is_feature_supported,
+    VramMonitor,
 )
 
 
@@ -136,6 +136,9 @@ Higher resolution tends to need higher strength. Too high may oversmooth small m
     strength_upper = math.ceil(strength)
     weighting = strength - strength_lower
 
+    vram_monitor = VramMonitor(device=0)
+    vram_monitor.start()
+
     model: PyTorchModel = nnlib.open(model_path=model_dir / temporal_models[strength_lower])
     if strength_lower != strength_upper:
         lower_model: PyTorchModel = model
@@ -202,13 +205,11 @@ Higher resolution tends to need higher strength. Too high may oversmooth small m
     infer_thread.set_consumer(encoder_thread)
     encoder_thread.set_producer(decoder_thread)
 
-
     # Progress bar
     #-------------------------------------------------------------------------
     total_frames: int = in_media.video.frame_count
     progress_thread: ProgressThread = ProgressThread(total=total_frames)
     encoder_thread.set_progress_thread(progress_thread)
-
 
 
     # Main loop
@@ -223,6 +224,7 @@ Higher resolution tends to need higher strength. Too high may oversmooth small m
         progress_thread=progress_thread,
         total_frames=total_frames,
         vram_stats=stats,
+        vram_monitor=vram_monitor,
         debug=debug
     )
 
