@@ -1,0 +1,61 @@
+# Packages
+#===========================================================
+[packages]
+host = "https://github.com/herlegon/rehost/releases/download/external"
+do_cache = false
+
+
+# Windows
+#-----------------------------------------------------------
+# [packages.win32]
+# do_cache = false
+[packages.win32.ffmpeg]
+host = "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-28-13-06/"
+do_cache = false
+
+# [packages.win32.ffmpeg.gpl]
+filename = "ffmpeg-n9.0.2-14-gebafaee10a-win64-gpl-9.0.zip"
+
+
+# Linux
+#-----------------------------------------------------------
+[packages.linux.ffmpeg]
+host = "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-28-13-06/"
+do_cache = true
+
+# [packages.linux.ffmpeg.gpl]
+filename = "ffmpeg-n9.0.2-14-gebafaee10a-linux64-gpl-9.0.tar.xz"
+
+
+# Python packages
+#===========================================================
+
+# Second pass
+[py_packages.delayed]
+do_cache = false
+
+# PyTorch
+[py_packages.delayed.torch.cuda]
+index-url = "https://download-r2.pytorch.org/whl/cu134"
+torch = "2.15.0+cu134"
+torchvision = "0.29.2+cu134"
+
+[py_packages.delayed.torch.cpu]
+index-url = "https://download-r2.pytorch.org/whl/cpu"
+torch = "2.15.0+cpu"
+torchvision = "0.29.2+cpu"
+# https://download-r2.pytorch.org/whl/cu134/torchvision-0.29.2%2Bcu134-py3-none-win_amd64.whl
+# https://download.pytorch.org/whl/cu134/torchvision-0.29.2%2Bcu134-cp314-cp314-win_amd64.whl
+
+# Pretty names
+#===========================================================
+[packages.names]
+ffmpeg = "FFmpeg"
+
+[py_packages.names]
+nvidia-ml-py = "pyNVML"
+torch = "PyTorch"
+torch-cuda = "PyTorch (CUDA)"
+torch-cpu = "PyTorch (CPU)"
+torch-rocm = "PyTorch (ROCm)"
+torchvision = "TorchVision"
