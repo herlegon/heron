@@ -29,6 +29,16 @@ filename = "ffmpeg-n9.0.2-14-gebafaee10a-linux64-gpl-9.0.tar.xz"
 
 # Python packages
 #===========================================================
+[py_packages]
+[py_packages.common]
+pypi = [
+    "setuptools",
+    "wheel",
+    "setuptools",
+    "wheel",
+    "psutil",
+    "nvidia-ml-py",
+]
 
 # Second pass
 [py_packages.delayed]
@@ -44,8 +54,14 @@ torchvision = "0.29.2+cu134"
 index-url = "https://download-r2.pytorch.org/whl/cpu"
 torch = "2.15.0+cpu"
 torchvision = "0.29.2+cpu"
-# https://download-r2.pytorch.org/whl/cu134/torchvision-0.29.2%2Bcu134-py3-none-win_amd64.whl
-# https://download.pytorch.org/whl/cu134/torchvision-0.29.2%2Bcu134-cp314-cp314-win_amd64.whl
+
+# Nvidia TensorRT
+[py_packages.delayed.tensorrt]
+index-url = "https://pypi.nvidia.com"
+tensorrt_cu13_libs = "11.4.0.106"
+tensorrt_cu13_bindings = "11.4.0.106"
+tensorrt = "11.4.0.106"
+
 
 # Pretty names
 #===========================================================
